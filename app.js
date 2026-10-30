@@ -83,8 +83,8 @@ const fxId = (f, k) => `${f.id}@${k}`;
 const fxRecord = (f, k) => S.records.find(r => r.fixedId === fxId(f, k));
 // a bill typed in by hand (same item, name matches) also counts as recorded
 function fxManual(f, k) {
-  const r0 = range(k), nm = f.name.replace(/\s/g, '');
-  return S.records.find(r => !r.fixedId && r.type === f.type && r.date >= r0.start && r.date <= r0.end && (f.type !== '지출' || r.cat === f.cat) && r.what && (r.what.replace(/\s/g, '').includes(nm) || nm.includes(r.what.replace(/\s/g, ''))));
+  const nm = f.name.replace(/\s/g, '');
+  return S.records.find(r => !r.fixedId && r.type === f.type && recPeriod(r) === k && (f.type !== '지출' || r.cat === f.cat) && r.what && (r.what.replace(/\s/g, '').includes(nm) || nm.includes(r.what.replace(/\s/g, ''))));
 }
 function fixedStatus(f, k) {
   const d = occurrence(f, k); if (!d) return null;
@@ -105,7 +105,19 @@ function autoRecordFixed() {
 }
 
 // ---------- calculations ----------
-function recsIn(k) { const r = range(k); return S.records.filter(x => x.date >= r.start && x.date <= r.end); }
+// which month a record belongs to. A fixed-income item (급여) paid up to 4 days early
+// (payday on a holiday → previous business day) still counts for the month it's meant for.
+const EARLY_PAY_DAYS = 4;
+function recPeriod(r) {
+  if (r.fixedId && r.fixedId.includes('@')) return r.fixedId.split('@')[1];
+  const k = periodOf(r.date);
+  if (r.type === '수입' && S.fixed.some(f => f.type === '수입' && !f.hidden && f.cat === r.cat)) {
+    const d = parse(r.date), [y, m] = keyParts(addKey(k, 1)), start = mkDate(y, m, startDay());
+    if ((start - d) / 864e5 <= EARLY_PAY_DAYS) return addKey(k, 1);
+  }
+  return k;
+}
+function recsIn(k) { return S.records.filter(x => recPeriod(x) === k); }
 function calc(k) {
   const recs = recsIn(k), B = budgetsFor(k), isCur = k === curKey();
   const spent = {}; let lunchS = 0, shopS = 0, income = 0, saving = 0;
