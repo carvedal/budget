@@ -13,6 +13,7 @@ const TABS = {
 };
 const NUM = new Set(['amount','payDay','cycleStart','month','day']);
 const BOOL = new Set(['fullFixed','reserve','hidden','variable']);
+const VERSION = '10.30-6';
 const LIFE = '생활비', LUNCH = '평일 점심', SHOP = '식비·생활용품';
 const LS = { data: 'budget.data', conn: 'budget.conn', queue: 'budget.queue', draft: 'budget.draft', last: 'budget.lastPay' };
 
@@ -557,7 +558,8 @@ function vSettings() {
   <section class="col" style="gap:10px"><h2>데이터</h2><div class="list">
     <button type="button" class="li" data-act="connect"><span class="grow col" style="gap:2px"><span class="s14">구글 시트 연동</span><span class="s12 muted" id="syncLabel">${syncText()}</span></span><span class="s13 sage">${conn() ? '바꾸기' : '연결하기'}</span></button>
     ${conn() ? '<button type="button" class="li" data-act="pull"><span class="grow s14">지금 시트에서 다시 불러오기</span></button>' : ''}
-    <button type="button" class="li" data-act="export"><span class="grow col" style="gap:2px"><span class="s14">엑셀(CSV) 파일로 내보내기</span><span class="s12 muted">전체 내역 · PC 예산표는 구글 시트의 '예산표' 탭에 있어요</span></span></button></div></section>`;
+    <button type="button" class="li" data-act="export"><span class="grow col" style="gap:2px"><span class="s14">엑셀(CSV) 파일로 내보내기</span><span class="s12 muted">전체 내역 · PC 예산표는 구글 시트의 '예산표' 탭에 있어요</span></span></button></div></section>
+  <p class="note" style="text-align:center">앱 버전 ${VERSION}</p>`;
 }
 
 // ---------- bottom sheet (forms) ----------
