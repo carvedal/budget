@@ -14,7 +14,7 @@ const TABS = {
 const NUM = new Set(['amount','payDay','cycleStart','month','day']);
 const BOOL = new Set(['fullFixed','reserve','hidden','variable']);
 const LIFE = '생활비', LUNCH = '평일 점심', SHOP = '식비·생활용품';
-const LS = { data: 'budget.data', conn: 'budget.conn', queue: 'budget.queue', draft: 'budget.draft' };
+const LS = { data: 'budget.data', conn: 'budget.conn', queue: 'budget.queue', draft: 'budget.draft', last: 'budget.lastPay' };
 
 // ---------- tiny helpers ----------
 const $ = (s, r = document) => r.querySelector(s);
@@ -317,12 +317,26 @@ function vFixed() {
 }
 
 // ----- 입력 -----
+// ---------- default payment: set per item in 설정 (A), otherwise the last one used (B) ----------
+const payKey = (cat, sub) => cat === LIFE ? `${LIFE}|${sub || SHOP}` : cat;
+function defaults() { try { return JSON.parse(cfg('기본결제', '{}') || '{}'); } catch (e) { return {}; } }
+function defaultPay(type, cat, sub) {
+  const D = defaults(), L = store.get(LS.last, {}), k = payKey(cat, sub);
+  return D[k] || (type === '수입' ? D['수입'] : '') || L[type + ':' + k] || '';
+}
+function applyDefaultPay() {
+  const out = UI.mode === '지출';
+  const pays = S.accounts.filter(a => !a.hidden && (out || a.kind !== '카드')).map(a => a.name);
+  const p = defaultPay(UI.mode, out ? UI.cat : UI.inCat, UI.sub);
+  if (p && pays.includes(p)) { if (out) UI.pay = p; else UI.inPay = p; }
+}
+function setDefaultPay(k, pay) { const D = defaults(); if (pay) D[k] = pay; else delete D[k]; setCfg('기본결제', JSON.stringify(D)); }
 function vInput() {
   const k = curKey(), C = calc(k), out = UI.mode === '지출';
   const cats = out ? expCats().map(c => c.name) : incCats().map(c => c.name);
   const pays = S.accounts.filter(a => !a.hidden && (out || a.kind !== '카드')).map(a => a.name);
-  if (out) { if (!cats.includes(UI.cat)) UI.cat = cats.includes(LIFE) ? LIFE : cats[0]; if (!pays.includes(UI.pay)) UI.pay = pays[0]; }
-  else { if (!cats.includes(UI.inCat)) UI.inCat = cats[0]; if (!pays.includes(UI.inPay)) UI.inPay = pays[0]; }
+  if (out) { if (!cats.includes(UI.cat)) { UI.cat = cats.includes(LIFE) ? LIFE : cats[0]; applyDefaultPay(); } if (!pays.includes(UI.pay)) { applyDefaultPay(); if (!pays.includes(UI.pay)) UI.pay = pays[0]; } }
+  else { if (!cats.includes(UI.inCat)) { UI.inCat = cats[0]; applyDefaultPay(); } if (!pays.includes(UI.inPay)) { applyDefaultPay(); if (!pays.includes(UI.inPay)) UI.inPay = pays[0]; } }
   const cat = out ? UI.cat : UI.inCat, pay = out ? UI.pay : UI.inPay;
   const row = C.rows.find(r => r.c.name === cat);
   let hint = '', hintBad = false;
@@ -367,6 +381,7 @@ function doSave() {
   const out = UI.mode === '지출';
   const r = { id: uid(), date: UI.date, type: UI.mode, cat: out ? UI.cat : UI.inCat, sub: out && UI.cat === LIFE ? UI.sub : '', amount, pay: out ? UI.pay : UI.inPay, what: (UI.what || '').trim(), memo: (UI.memo || '').trim(), fixedId: '' };
   UI.amt = ''; UI.what = ''; UI.memo = '';
+  const L = store.get(LS.last, {}); L[r.type + ':' + payKey(r.cat, r.sub)] = r.pay; if (r.type === '수입') L['수입:' + r.cat] = r.pay; store.set(LS.last, L);
   saveRecord(r);
   toast(`${r.cat}${r.sub ? '·' + r.sub : ''} ${won(amount)}원 기록했어요`);
 }
@@ -474,7 +489,7 @@ function vSettings() {
     const changed = Object.keys(D).some(c => D[c] !== (B[c] || 0));
     const fixedRows = S.fixed.filter(f => f.type === '지출').sort((a, b) => (a.period === b.period ? 0 : a.period === '매월' ? -1 : 1) || a.day - b.day);
     body = `<div class="card" style="background:var(--ink);border-color:var(--ink);color:var(--bg)"><span class="s13" style="color:#D9D4C8">한 달 총 예산</span><span class="big">${won(tb)}원</span><span class="s12" style="color:#D9D4C8">고정수입 ${won(fixedMonthlySum('수입'))} − 저축 ${won(fixedMonthlySum('저축'))} · 이 안에서 나눠 써요</span></div>
-    <div class="card"><div class="between"><span class="row s15 b" style="gap:6px">${LIFE}<span class="tag" style="color:var(--sage);border:1px solid #C9D3C6;font-weight:400">자동 계산</span></span><span class="b ${warn ? 'red' : ''}" style="font-size:18px">${won(life)}원</span></div>
+    <div class="card"><div class="between"><button type="button" class="row s15 b" style="gap:6px;background:none;border:0;padding:0;cursor:pointer" data-act="editCat" data-v="${LIFE}">${LIFE}<span class="tag" style="color:var(--sage);border:1px solid #C9D3C6;font-weight:400">자동 계산</span><span class="s12 muted" style="font-weight:400">· 기본 결제수단</span></button><span class="b ${warn ? 'red' : ''}" style="font-size:18px">${won(life)}원</span></div>
       <button type="button" class="between s13 muted" style="background:none;border:0;padding:4px 0;cursor:pointer" data-act="editLunch"><span>${LUNCH} · ${esc(cfg('점심계좌', ''))} (고정)</span><span style="border-bottom:1px dashed var(--chip)">${won(lunch)}</span></button>
       <div class="between s13 muted"><span>${SHOP} · ${esc(cfg('생활비계좌', ''))} (자동)</span><span>${won(shop)}</span></div>
       <span class="s12 muted">= 총 예산 − 아래 항목 합계 ${won(others)}</span>
@@ -571,9 +586,16 @@ function editCat(name, kind) {
     ...(out ? [{ k: 'account', label: '이체 계좌 (월급날 이 계좌로 예산을 보내요)', type: 'select', options: ['', ...S.accounts.filter(a => a.kind !== '카드').map(a => a.name)], v: c.account },
       { k: 'fullFixed', label: '월급날 전액 사용으로 고정', help: '기록이 없어도 예산 100% 사용으로 집계', type: 'toggle', v: c.fullFixed },
       { k: 'reserve', label: '적립 항목', help: '매년 나가는 돈을 모으는 항목 · 초과해도 생활비에서 안 빠져요', type: 'toggle', v: c.reserve }] : []),
+    ...(c.name === LIFE
+      ? [{ k: 'defShop', label: `기본 결제수단 · ${SHOP}`, type: 'select', options: ['', ...S.accounts.map(a => a.name)], v: defaults()[payKey(LIFE, SHOP)] || '' },
+         { k: 'defLunch', label: `기본 결제수단 · ${LUNCH}`, type: 'select', options: ['', ...S.accounts.map(a => a.name)], v: defaults()[payKey(LIFE, LUNCH)] || '' }]
+      : [{ k: 'defPay', label: '기본 결제수단 (비우면 마지막에 쓴 걸 기억해요)', type: 'select', options: ['', ...S.accounts.filter(a => out || a.kind !== '카드').map(a => a.name)], v: defaults()[c.name] || '' }]),
     { k: 'hidden', label: '숨기기 (기록은 남아요)', type: 'toggle', v: c.hidden },
   ], v => {
     if (!v.name) { toast('이름을 입력해 주세요'); return false; }
+    if (c.name === LIFE) { setDefaultPay(payKey(LIFE, SHOP), v.defShop); setDefaultPay(payKey(LIFE, LUNCH), v.defLunch); }
+    else { if (name && v.name !== name) setDefaultPay(name, ''); setDefaultPay(v.name, v.defPay); }
+    delete v.defShop; delete v.defLunch; delete v.defPay; saveTable('settings');
     if (name === LIFE && v.name !== LIFE) { toast('생활비는 이름을 바꿀 수 없어요'); return false; }
     if (name && v.name !== name) { S.records.forEach(r => { if (r.cat === name) { r.cat = v.name; queue({ op: 'upsert', tab: TABS.records.tab, header: header('records'), row: rowOf('records', r) }); } }); S.budgets.forEach(b => { if (b.cat === name) b.cat = v.name; }); S.fixed.forEach(f => { if (f.cat === name) f.cat = v.name; }); saveTable('budgets'); saveTable('fixed'); }
     else if (!name && S.cats.find(x => x.name === v.name)) { toast('같은 이름이 있어요'); return false; }
@@ -624,8 +646,8 @@ document.addEventListener('click', e => {
   if (UI.view === 'input') keepInputs();
   switch (a) {
     case 'mode': UI.mode = v; break;
-    case 'cat': if (UI.mode === '지출') { UI.cat = v; if (v === LIFE) autoLunch(); } else UI.inCat = v; break;
-    case 'sub': UI.sub = v; UI.autoLunch = false; break;
+    case 'cat': if (UI.mode === '지출') UI.cat = v; else UI.inCat = v; applyDefaultPay(); break;
+    case 'sub': UI.sub = v; UI.autoLunch = false; applyDefaultPay(); break;
     case 'pay': if (UI.mode === '지출') { UI.pay = v; autoLunch(); } else UI.inPay = v; break;
     case 'save': doSave(); return;
     case 'check': { const c = JSON.parse(cfg('이체체크', '{}') || '{}'); const t = transferPlan(); Object.keys(c).forEach(k => { if (k.split('|')[0] < ymd(new Date(parse(today()).getTime() - 40 * 864e5))) delete c[k]; }); c[v] = !c[v]; setCfg('이체체크', JSON.stringify(c)); saveTable('settings'); break; }
@@ -691,6 +713,14 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   const cached = store.get(LS.data, null);
   if (cached && cached.cats) S = cached; else sample();
   if (!conn() && !S.demo) sample();
+  if (location.hash.startsWith('#defaults=')) {
+    try {
+      const b = location.hash.slice(10).replace(/-/g, '+').replace(/_/g, '/');
+      const obj = JSON.parse(decodeURIComponent(escape(atob(b))));
+      const D = defaults(); Object.assign(D, obj); setCfg('기본결제', JSON.stringify(D)); saveTable('settings');
+      setTimeout(() => toast('기본 결제수단을 저장했어요'), 300);
+    } catch (e) { setTimeout(() => toast('링크를 읽지 못했어요'), 300); }
+  }
   UI.view = 'input'; if (location.hash !== '#input') history.replaceState(null, '', '#input');
   render();
   if (conn()) pull().then(ok => { if (ok) { autoRecordFixed(); render(); } }); else autoRecordFixed();
