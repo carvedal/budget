@@ -157,8 +157,11 @@ function transferPlan() {
   for (const c of expCats(true)) { if (c.name === LIFE) continue; add(c.account, B[c.name] || 0, c.name); }
   const lifeB = lifeFrom(B), lunchB = lunchBudget();
   add(cfg('점심계좌', ''), lunchB, LUNCH); add(cfg('생활비계좌', ''), lifeB - lunchB, SHOP);
-  for (const f of S.fixed) if (!f.hidden && f.type === '저축' && f.period === '매월') add(f.pay, f.amount, f.name);
-  const order = S.accounts.map(a => a.name); const keys = Object.keys(sums).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
+  const savingAccts = new Set();
+  for (const f of S.fixed) if (!f.hidden && f.type === '저축' && f.period === '매월') { add(f.pay, f.amount, f.name); savingAccts.add(f.pay); }
+  // account-list order, but savings always go last
+  const order = S.accounts.map(a => a.name), rank = a => (savingAccts.has(a) ? 1000 : 0) + (order.indexOf(a) + 1 || 99);
+  const keys = Object.keys(sums).sort((a, b) => rank(a) - rank(b));
   return { payday, k, items: keys.map(a => ({ key: 'pay:' + a, name: a, what: from[a].join('·'), amount: sums[a] })), total: keys.reduce((s, a) => s + sums[a], 0) };
 }
 
