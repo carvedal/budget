@@ -78,3 +78,5 @@ label.fl{font-size:13px;color:var(--muted)}
 #toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30;max-width:90vw}
 #toast.show{opacity:1}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.chip.on.sv{background:var(--blue);border-color:var(--blue);color:#fff}
+.seg button{white-space:nowrap}

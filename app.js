@@ -37,7 +37,7 @@ const store = {
 // ---------- state ----------
 let S = null;              // data
 let UI = {                 // view state (not persisted)
-  view: 'input', mode: '지출', cat: null, sub: SHOP, pay: null, inCat: null, inPay: null, date: today(),
+  view: 'input', mode: '지출', cat: null, sub: SHOP, pay: null, inCat: null, inPay: null, svPay: null, date: today(),
   slide: 0, group: '전체', sumView: 'cat', hl: LIFE, setTab: 'budget', histKey: null, filter: {}, draft: null,
 };
 
@@ -325,22 +325,27 @@ const payKey = (cat, sub) => cat === LIFE ? `${LIFE}|${sub || SHOP}` : cat;
 function defaults() { try { return JSON.parse(cfg('기본결제', '{}') || '{}'); } catch (e) { return {}; } }
 function defaultPay(type, cat, sub) {
   const D = defaults(), L = store.get(LS.last, {}), k = payKey(cat, sub);
+  if (type === '저축') { const f = S.fixed.find(x => x.type === '저축' && !x.hidden); return D['저축'] || L['저축:저축'] || (f ? f.pay : ''); }
   return D[k] || (type === '수입' ? D['수입'] : '') || L[type + ':' + k] || '';
 }
+// the input screen keeps a separate item/payment choice per mode (지출 / 수입 / 저축)
+const curCat = () => UI.mode === '지출' ? UI.cat : UI.mode === '수입' ? UI.inCat : '저축';
+const curPay = () => UI.mode === '지출' ? UI.pay : UI.mode === '수입' ? UI.inPay : UI.svPay;
+function setPay(p) { if (UI.mode === '지출') UI.pay = p; else if (UI.mode === '수입') UI.inPay = p; else UI.svPay = p; }
+const payList = () => S.accounts.filter(a => !a.hidden && (UI.mode === '지출' || a.kind !== '카드')).map(a => a.name);
 function applyDefaultPay() {
-  const out = UI.mode === '지출';
-  const pays = S.accounts.filter(a => !a.hidden && (out || a.kind !== '카드')).map(a => a.name);
-  const p = defaultPay(UI.mode, out ? UI.cat : UI.inCat, UI.sub);
-  if (p && pays.includes(p)) { if (out) UI.pay = p; else UI.inPay = p; }
+  const p = defaultPay(UI.mode, curCat(), UI.sub);
+  if (p && payList().includes(p)) setPay(p);
 }
 function setDefaultPay(k, pay) { const D = defaults(); if (pay) D[k] = pay; else delete D[k]; setCfg('기본결제', JSON.stringify(D)); }
 function vInput() {
-  const k = curKey(), C = calc(k), out = UI.mode === '지출';
-  const cats = out ? expCats().map(c => c.name) : incCats().map(c => c.name);
-  const pays = S.accounts.filter(a => !a.hidden && (out || a.kind !== '카드')).map(a => a.name);
-  if (out) { if (!cats.includes(UI.cat)) { UI.cat = cats.includes(LIFE) ? LIFE : cats[0]; applyDefaultPay(); } if (!pays.includes(UI.pay)) { applyDefaultPay(); if (!pays.includes(UI.pay)) UI.pay = pays[0]; } }
-  else { if (!cats.includes(UI.inCat)) { UI.inCat = cats[0]; applyDefaultPay(); } if (!pays.includes(UI.inPay)) { applyDefaultPay(); if (!pays.includes(UI.inPay)) UI.inPay = pays[0]; } }
-  const cat = out ? UI.cat : UI.inCat, pay = out ? UI.pay : UI.inPay;
+  const k = curKey(), C = calc(k), out = UI.mode === '지출', sav = UI.mode === '저축';
+  const cats = out ? expCats().map(c => c.name) : sav ? [] : incCats().map(c => c.name);
+  const pays = payList();
+  if (out && !cats.includes(UI.cat)) { UI.cat = cats.includes(LIFE) ? LIFE : cats[0]; applyDefaultPay(); }
+  if (UI.mode === '수입' && !cats.includes(UI.inCat)) { UI.inCat = cats[0]; applyDefaultPay(); }
+  if (!pays.includes(curPay())) { applyDefaultPay(); if (!pays.includes(curPay())) setPay(pays[0]); }
+  const cat = curCat(), pay = curPay(), onCls = out ? '' : sav ? ' sv' : ' in';
   const row = C.rows.find(r => r.c.name === cat);
   let hint = '', hintBad = false;
   if (out && cat === LIFE) { const l = UI.sub === LUNCH ? C.lunchLeft : C.shopLeft; hint = l >= 0 ? `${won(l)}원 남음` : `${won(-l)}원 초과`; hintBad = l < cfgNum(UI.sub === LUNCH ? '점심경고' : '생활비경고', 0); }
@@ -357,23 +362,24 @@ function vInput() {
       <div class="between s12"><span class="${C.left < 0 ? 'red' : 'sage'}">${C.left < 0 ? '예산보다 ' + won(-C.left) + '원 더 썼어요' : '남은 예산 ' + won(C.left) + '원'}</span><span class="muted">${C.tb ? Math.round(C.total / C.tb * 100) : 0}%</span></div></section>`,
     `<section class="card" aria-label="카드값"><span class="s13 muted">다음 카드값</span>${cardsTxt}<span class="s12 muted">결제일 전에 결제 계좌에 넣어두세요</span></section>`,
   ];
-  $('#sticky').innerHTML = `<button type="button" class="btn" data-act="save">${out ? '지출' : '수입'} 기록하기</button>`;
+  $('#sticky').innerHTML = `<button type="button" class="btn" data-act="save">${UI.mode} 기록하기</button>`;
   return `<div class="between"><h1>${keyLabel(k)}</h1><span class="s13 muted">${rangeLabel(k)} · ${daysLeft(k)}일 남음</span></div>
   <div class="col" style="gap:8px"><div class="carousel" id="carousel">${slides.join('')}</div><div class="dots" aria-hidden="true">${slides.map((_, i) => `<i class="${i === UI.slide ? 'on' : ''}"></i>`).join('')}</div></div>
-  ${seg([['지출', '지출'], ['수입', '수입']], UI.mode, 'mode')}
+  ${seg([['지출', '지출'], ['수입', '수입'], ['저축', '저축']], UI.mode, 'mode')}
   <div class="card" style="padding:6px 16px;gap:0">
     <div class="between" style="align-items:center;min-height:44px;border-bottom:1px solid var(--line2)"><label for="amt" class="s13 muted">금액</label>
       <label class="s13" style="position:relative;background:var(--bg);border-radius:10px;padding:8px 10px">${(() => { const d = parse(UI.date); return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]}) ▾`; })()}<input type="date" id="date" value="${UI.date}" aria-label="날짜" style="position:absolute;inset:0;opacity:0"></label></div>
     <div class="row" style="align-items:baseline;gap:6px;padding:6px 0 10px;border-bottom:1px solid var(--line2)"><input id="amt" class="plain grow" inputmode="numeric" placeholder="0" autocomplete="off" style="font-size:36px;font-weight:700;letter-spacing:-.02em" value="${UI.amt || ''}"><span class="s15 b" style="font-size:18px">원</span></div>
-    <label for="what" class="s13 muted" style="padding-top:10px">${out ? '사용 내역' : '수입 내역'}</label>
-    <input id="what" class="plain" style="height:44px;font-size:16px" placeholder="${out ? '예: 왕란 30구' : '예: 중고거래 판매'}" value="${esc(UI.what || '')}">
+    <label for="what" class="s13 muted" style="padding-top:10px">${out ? '사용 내역' : sav ? '저축 내역' : '수입 내역'}</label>
+    <input id="what" class="plain" style="height:44px;font-size:16px" placeholder="${out ? '예: 왕란 30구' : sav ? '예: 비상금, 여행 적금' : '예: 중고거래 판매'}" value="${esc(UI.what || '')}">
   </div>
-  <div class="col" style="gap:10px"><div class="between"><span class="s13 muted">${out ? '항목' : '수입 항목'}</span><span class="s12 ${hintBad ? 'red b' : 'sage'}">${hint ? esc(cat + ' · ' + hint) : ''}</span></div>
-    <div class="chips">${cats.map(c => `<button type="button" class="chip ${c === cat ? 'on' + (out ? '' : ' in') : ''}" data-act="cat" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+  ${sav ? '<p class="note">추가로 모은 돈을 기록해요. 생활비 예산은 그대로이고, 내역의 저축·총계에 반영돼요. 매달 정기 저축은 고정 탭에서 자동으로 기록돼요.</p>' : ''}
+  <div class="col" style="gap:10px;${sav ? 'display:none' : ''}"><div class="between"><span class="s13 muted">${out ? '항목' : '수입 항목'}</span><span class="s12 ${hintBad ? 'red b' : 'sage'}">${hint ? esc(cat + ' · ' + hint) : ''}</span></div>
+    <div class="chips">${cats.map(c => `<button type="button" class="chip ${c === cat ? 'on' + onCls : ''}" data-act="cat" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div>
     ${out && cat === LIFE ? `<div class="col" style="gap:6px;background:var(--soft);border-radius:14px;padding:8px">${seg([[SHOP, SHOP], [LUNCH, LUNCH]], UI.sub, 'sub').replace('class="seg"', 'class="seg" style="padding:0;background:none"')}<span class="s12 muted" style="padding:0 4px">${UI.autoLunch && UI.sub === LUNCH ? '지역화폐·평일이라 평일 점심으로 골랐어요' : ''}</span></div>` : ''}
   </div>
-  <div class="col" style="gap:10px"><span class="s13 muted">${out ? '결제' : '받은 통장'}</span>
-    <div class="chips">${pays.map(p => `<button type="button" class="chip ${p === pay ? 'on' + (out ? '' : ' in') : ''}" data-act="pay" data-v="${esc(p)}">${esc(p)}</button>`).join('')}</div></div>
+  <div class="col" style="gap:10px"><span class="s13 muted">${out ? '결제' : sav ? '보낸 통장' : '받은 통장'}</span>
+    <div class="chips">${pays.map(p => `<button type="button" class="chip ${p === pay ? 'on' + onCls : ''}" data-act="pay" data-v="${esc(p)}">${esc(p)}</button>`).join('')}</div></div>
   <div class="col" style="gap:6px"><label for="memo" class="s13 muted">메모 <span class="faint">(선택)</span></label><input id="memo" class="box" placeholder="예: 1+1 행사" value="${esc(UI.memo || '')}"></div>`;
 }
 function keepInputs() { const a = $('#amt'), w = $('#what'), m = $('#memo'); if (a) UI.amt = a.value; if (w) UI.what = w.value; if (m) UI.memo = m.value; }
@@ -382,7 +388,7 @@ function doSave() {
   const amount = Number(String(UI.amt || '').replace(/[^\d]/g, ''));
   if (!amount) { toast('금액을 입력해 주세요'); $('#amt') && $('#amt').focus(); return; }
   const out = UI.mode === '지출';
-  const r = { id: uid(), date: UI.date, type: UI.mode, cat: out ? UI.cat : UI.inCat, sub: out && UI.cat === LIFE ? UI.sub : '', amount, pay: out ? UI.pay : UI.inPay, what: (UI.what || '').trim(), memo: (UI.memo || '').trim(), fixedId: '' };
+  const r = { id: uid(), date: UI.date, type: UI.mode, cat: curCat(), sub: out && UI.cat === LIFE ? UI.sub : '', amount, pay: curPay(), what: (UI.what || '').trim(), memo: (UI.memo || '').trim(), fixedId: '' };
   UI.amt = ''; UI.what = ''; UI.memo = '';
   const L = store.get(LS.last, {}); L[r.type + ':' + payKey(r.cat, r.sub)] = r.pay; if (r.type === '수입') L['수입:' + r.cat] = r.pay; store.set(LS.last, L);
   saveRecord(r);
@@ -651,7 +657,7 @@ document.addEventListener('click', e => {
     case 'mode': UI.mode = v; break;
     case 'cat': if (UI.mode === '지출') UI.cat = v; else UI.inCat = v; applyDefaultPay(); break;
     case 'sub': UI.sub = v; UI.autoLunch = false; applyDefaultPay(); break;
-    case 'pay': if (UI.mode === '지출') { UI.pay = v; autoLunch(); } else UI.inPay = v; break;
+    case 'pay': setPay(v); if (UI.mode === '지출') autoLunch(); break;
     case 'save': doSave(); return;
     case 'check': { const c = JSON.parse(cfg('이체체크', '{}') || '{}'); const t = transferPlan(); Object.keys(c).forEach(k => { if (k.split('|')[0] < ymd(new Date(parse(today()).getTime() - 40 * 864e5))) delete c[k]; }); c[v] = !c[v]; setCfg('이체체크', JSON.stringify(c)); saveTable('settings'); break; }
     case 'group': UI.group = v; break;
