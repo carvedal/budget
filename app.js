@@ -409,6 +409,20 @@ function doSave() {
 
 // ----- 내역 -----
 function vHistory() {
+  const k = UI.histKey || curKey(), F = UI.filter, H = hParts();
+  const filtered = H.filtered, fl = H.fl;
+  return `<div class="between" style="align-items:center">
+      <button type="button" class="stepper" style="border:0;background:none" data-act="hist" data-v="-1" aria-label="이전 달">‹</button>
+      <div class="col" style="align-items:center;gap:2px"><h1 style="font-size:22px">${filtered && (F.from || F.to) ? '기간 검색' : keyLabel(k)}</h1><span class="s12 muted">${filtered && (F.from || F.to) ? fl : rangeLabel(k)}</span></div>
+      <button type="button" class="stepper" style="border:0;background:none;${k >= curKey() ? 'opacity:.3' : ''}" data-act="hist" data-v="1" aria-label="다음 달" ${k >= curKey() ? 'disabled' : ''}>›</button></div>
+  <div id="hBoxes" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${H.boxes}</div>
+  <div class="row"><label class="row grow card" style="flex-direction:row;padding:0 14px;height:44px;border-radius:22px;gap:8px;align-items:center"><span class="muted">${svg('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>', 1.8).replace('<svg', '<svg width="16" height="16"')}</span><input id="q" class="plain grow" placeholder="내역·메모 검색" value="${esc(F.q || '')}" aria-label="검색"></label>
+    <button type="button" class="chip sm ${filtered && !F.q ? 'on' : ''}" data-act="filter">필터</button></div>
+  ${fl ? `<div class="between s12"><span class="muted">필터: ${esc(fl)}</span><button type="button" class="s12 sage" style="background:none;border:0;min-height:32px" data-act="clearFilter">지우기</button></div>` : ''}
+  <div id="hList" class="col" style="gap:18px">${H.list}</div>`;
+}
+// the parts of 내역 that change while typing a search (the search box itself is never redrawn)
+function hParts() {
   const k = UI.histKey || curKey(), F = UI.filter, C = calc(k);
   let recs = recsIn(k);
   if (F.from || F.to) recs = S.records.filter(r => (!F.from || r.date >= F.from) && (!F.to || r.date <= F.to));
@@ -423,17 +437,11 @@ function vHistory() {
   const days = {}; recs.forEach(r => (days[r.date] = days[r.date] || []).push(r));
   const box = (l, v, cls, dark) => `<div class="card" style="padding:12px 14px;gap:2px;${dark ? 'background:var(--ink);border-color:var(--ink)' : ''}"><span class="s12" style="color:${dark ? '#D9D4C8' : 'var(--muted)'}">${l}</span><span class="b ${cls}" style="font-size:18px;${dark ? 'color:var(--bg)' : ''}">${v}</span></div>`;
   const fl = [F.from || F.to ? `${F.from ? md(F.from) : '처음'} ~ ${F.to ? md(F.to) : '오늘'}` : '', F.type, F.cat, F.pay].filter(Boolean).join(' · ');
-  return `<div class="between" style="align-items:center">
-      <button type="button" class="stepper" style="border:0;background:none" data-act="hist" data-v="-1" aria-label="이전 달">‹</button>
-      <div class="col" style="align-items:center;gap:2px"><h1 style="font-size:22px">${filtered && (F.from || F.to) ? '기간 검색' : keyLabel(k)}</h1><span class="s12 muted">${filtered && (F.from || F.to) ? fl : rangeLabel(k)}</span></div>
-      <button type="button" class="stepper" style="border:0;background:none;${k >= curKey() ? 'opacity:.3' : ''}" data-act="hist" data-v="1" aria-label="다음 달" ${k >= curKey() ? 'disabled' : ''}>›</button></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${box('수입', '+' + won(inc), 'sage')}${box('지출', '−' + won(sp), '')}${box('저축', '−' + won(sv), 'blue')}${box('총계 · 남은 돈', won(inc - sp - sv), '', true)}</div>
-  <div class="row"><label class="row grow card" style="flex-direction:row;padding:0 14px;height:44px;border-radius:22px;gap:8px;align-items:center"><span class="muted">${svg('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>', 1.8).replace('<svg', '<svg width="16" height="16"')}</span><input id="q" class="plain grow" placeholder="내역·메모 검색" value="${esc(F.q || '')}" aria-label="검색"></label>
-    <button type="button" class="chip sm ${filtered && !F.q ? 'on' : ''}" data-act="filter">필터</button></div>
-  ${fl ? `<div class="between s12"><span class="muted">필터: ${esc(fl)}</span><button type="button" class="s12 sage" style="background:none;border:0;min-height:32px" data-act="clearFilter">지우기</button></div>` : ''}
-  ${Object.keys(days).map(d => { const list = days[d], tot = list.filter(r => r.type === '지출').reduce((s, r) => s + r.amount, 0), dd = parse(d);
+  const boxes = `${box('수입', '+' + won(inc), 'sage')}${box('지출', '−' + won(sp), '')}${box('저축', '−' + won(sv), 'blue')}${box('총계 · 남은 돈', won(inc - sp - sv), '', true)}`;
+  const list = Object.keys(days).map(d => { const list = days[d], tot = list.filter(r => r.type === '지출').reduce((s, r) => s + r.amount, 0), dd = parse(d);
     return `<section class="col"><div class="between" style="padding:0 2px 6px;border-bottom:1px solid var(--chip)"><h2 class="s14" style="font-weight:400">${dd.getMonth() + 1}월 ${dd.getDate()}일 ${DOW[dd.getDay()]}요일${d === today() ? ' · 오늘' : ''}</h2><span class="s13 muted">${tot ? '−' + won(tot) : ''}</span></div>
-      ${list.map(r => `<button type="button" class="li" style="border-bottom:1px solid var(--soft)" data-act="editRec" data-v="${esc(r.id)}"><span class="grow col" style="gap:2px"><span class="s15">${esc(r.what || r.cat)}</span><span class="s12 muted">${esc(r.type === '지출' ? r.cat + (r.sub ? '·' + r.sub : '') : r.type)} · ${esc(r.pay)}${r.memo ? ' · ' + esc(r.memo) : ''}</span></span><span class="b ${r.type === '수입' ? 'sage' : r.type === '저축' ? 'blue' : ''}" style="font-size:16px">${r.type === '수입' ? '+' : ''}${won(r.amount)}</span></button>`).join('')}</section>`; }).join('') || '<p class="note">기록이 없어요.</p>'}`;
+      ${list.map(r => `<button type="button" class="li" style="border-bottom:1px solid var(--soft)" data-act="editRec" data-v="${esc(r.id)}"><span class="grow col" style="gap:2px"><span class="s15">${esc(r.what || r.cat)}</span><span class="s12 muted">${esc(r.type === '지출' ? r.cat + (r.sub ? '·' + r.sub : '') : r.type)} · ${esc(r.pay)}${r.memo ? ' · ' + esc(r.memo) : ''}</span></span><span class="b ${r.type === '수입' ? 'sage' : r.type === '저축' ? 'blue' : ''}" style="font-size:16px">${r.type === '수입' ? '+' : ''}${won(r.amount)}</span></button>`).join('')}</section>`; }).join('') || '<p class="note">기록이 없어요.</p>';
+  return { filtered, fl, boxes, list };
 }
 
 // ----- 집계 -----
@@ -718,10 +726,12 @@ document.addEventListener('click', e => {
 });
 function autoLunch() { const d = parse(UI.date).getDay(); if (UI.cat === LIFE && UI.pay === cfg('점심계좌', '') && d > 0 && d < 6) { UI.sub = LUNCH; UI.autoLunch = true; } }
 document.addEventListener('input', e => {
-  if (e.target.id === 'q') { UI.filter.q = e.target.value; clearTimeout(UI.qT); UI.qT = setTimeout(() => { render(); const q = $('#q'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 350); }
+  if (e.target.id === 'q') { UI.filter.q = e.target.value; clearTimeout(UI.qT); UI.qT = setTimeout(updateSearch, 250); }
   if (e.target.id === 'amt') { const n = e.target.value.replace(/[^\d]/g, ''); e.target.value = n ? Number(n).toLocaleString('ko-KR') : ''; }
   if (e.target.id === 'f_amount' || e.target.id === 'f_n') { const n = e.target.value.replace(/[^\d]/g, ''); e.target.value = n ? Number(n).toLocaleString('ko-KR') : ''; }
 });
+function updateSearch() { const H = hParts(), b = $('#hBoxes'), l = $('#hList'); if (b) b.innerHTML = H.boxes; if (l) l.innerHTML = H.list; }
+document.addEventListener('compositionend', e => { if (e.target.id === 'q') { UI.filter.q = e.target.value; updateSearch(); } });
 document.addEventListener('change', e => { if (e.target.id === 'date') { keepInputs(); UI.date = e.target.value || today(); autoLunch(); render(); } });
 document.addEventListener('scroll', e => { if (e.target.id === 'carousel') { const c = e.target, i = Math.round(c.scrollLeft / c.clientWidth); if (i !== UI.slide) { UI.slide = i; document.querySelectorAll('.dots i').forEach((d, j) => d.classList.toggle('on', j === i)); } } }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); if (e.key === 'Enter' && UI.view === 'input' && ['amt', 'what', 'memo'].includes(e.target.id)) doSave(); });
