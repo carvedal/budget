@@ -585,7 +585,7 @@ function editAcct(i) {
   const a = i == null ? { name: '', kind: '계좌', payAccount: '', payDay: 0, cycleStart: 0, hidden: false } : S.accounts[i];
   const old = a.name;
   openSheet(i == null ? '결제수단 추가' : old + ' 고치기', [
-    { k: 'name', label: '이름', v: a.name, ph: '예: 국민 468' }, { k: 'kind', label: '종류', type: 'select', options: ['계좌', '카드', '페이', '현금'], v: a.kind },
+    { k: 'name', label: '이름', v: a.name, ph: '예: 생활비 통장' }, { k: 'kind', label: '종류', type: 'select', options: ['계좌', '카드', '페이', '현금'], v: a.kind },
     { k: 'payAccount', label: '결제 계좌 (카드만)', type: 'select', options: ['', ...S.accounts.filter(x => x.kind !== '카드').map(x => x.name)], v: a.payAccount },
     { k: 'payDay', label: '결제일 (카드만)', type: 'number', v: a.payDay }, { k: 'cycleStart', label: '사용 기간 시작일 (카드만, 예: 23 → 전전월 23일 ~ 전월 22일)', type: 'number', v: a.cycleStart },
     { k: 'hidden', label: '숨기기 (기록은 남아요)', type: 'toggle', v: a.hidden },
