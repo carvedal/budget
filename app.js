@@ -13,7 +13,7 @@ const TABS = {
 };
 const NUM = new Set(['amount','payDay','cycleStart','month','day']);
 const BOOL = new Set(['fullFixed','reserve','hidden','variable']);
-const VERSION = '10.30-6';
+const VERSION = '11.09-1';
 const LIFE = '생활비', LUNCH = '평일 점심', SHOP = '식비·생활용품';
 const LS = { data: 'budget.data', conn: 'budget.conn', queue: 'budget.queue', draft: 'budget.draft', last: 'budget.lastPay' };
 
@@ -112,7 +112,9 @@ const EARLY_PAY_DAYS = 4;
 function recPeriod(r) {
   if (r.fixedId && r.fixedId.includes('@')) return r.fixedId.split('@')[1];
   const k = periodOf(r.date);
-  if (r.type === '수입' && S.fixed.some(f => f.type === '수입' && !f.hidden && f.cat === r.cat)) {
+  // only salary-sized amounts (at least half of the fixed income) move; small income on the 1st–4th stays put
+  const fx = S.fixed.find(f => f.type === '수입' && !f.hidden && f.cat === r.cat);
+  if (r.type === '수입' && fx && r.amount >= fx.amount / 2) {
     const d = parse(r.date), [y, m] = keyParts(addKey(k, 1)), start = mkDate(y, m, startDay());
     if ((start - d) / 864e5 <= EARLY_PAY_DAYS) return addKey(k, 1);
   }
@@ -356,7 +358,7 @@ function vInput() {
   const cats = out ? expCats().map(c => c.name) : sav ? [] : incCats().map(c => c.name);
   const pays = payList();
   if (out && !cats.includes(UI.cat)) { UI.cat = cats.includes(LIFE) ? LIFE : cats[0]; applyDefaultPay(); }
-  if (UI.mode === '수입' && !cats.includes(UI.inCat)) { UI.inCat = cats[0]; applyDefaultPay(); }
+  if (UI.mode === '수입' && !cats.includes(UI.inCat)) { const fixedInc = new Set(S.fixed.filter(f => f.type === '수입').map(f => f.cat)); UI.inCat = cats.find(c => !fixedInc.has(c)) || cats[0]; applyDefaultPay(); }
   if (!pays.includes(curPay())) { applyDefaultPay(); if (!pays.includes(curPay())) setPay(pays[0]); }
   const cat = curCat(), pay = curPay(), onCls = out ? '' : sav ? ' sv' : ' in';
   const row = C.rows.find(r => r.c.name === cat);
