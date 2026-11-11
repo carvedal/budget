@@ -13,7 +13,7 @@ const TABS = {
 };
 const NUM = new Set(['amount','payDay','cycleStart','month','day']);
 const BOOL = new Set(['fullFixed','reserve','hidden','variable']);
-const VERSION = '11.09-1';
+const VERSION = '11.11-1';
 const LIFE = '생활비', LUNCH = '평일 점심', SHOP = '식비·생활용품';
 const LS = { data: 'budget.data', conn: 'budget.conn', queue: 'budget.queue', draft: 'budget.draft', last: 'budget.lastPay' };
 
@@ -420,8 +420,9 @@ function vHistory() {
       <button type="button" class="stepper" style="border:0;background:none;${k >= curKey() ? 'opacity:.3' : ''}" data-act="hist" data-v="1" aria-label="다음 달" ${k >= curKey() ? 'disabled' : ''}>›</button></div>
   <div id="hBoxes" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${H.boxes}</div>
   <div class="row"><label class="row grow card" style="flex-direction:row;padding:0 14px;height:44px;border-radius:22px;gap:8px;align-items:center"><span class="muted">${svg('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>', 1.8).replace('<svg', '<svg width="16" height="16"')}</span><input id="q" class="plain grow" placeholder="내역·메모 검색" value="${esc(F.q || '')}" aria-label="검색"></label>
-    <button type="button" class="chip sm ${filtered && !F.q ? 'on' : ''}" data-act="filter">필터</button></div>
-  ${fl ? `<div class="between s12"><span class="muted">필터: ${esc(fl)}</span><button type="button" class="s12 sage" style="background:none;border:0;min-height:32px" data-act="clearFilter">지우기</button></div>` : ''}
+    <button type="button" class="chip sm ${fl ? 'on' : ''}" data-act="filter">필터</button>
+    <button type="button" id="clearBtn" class="chip sm" style="border-color:var(--red);color:var(--red);${filtered ? '' : 'display:none'}" data-act="clearFilter" aria-label="필터와 검색 모두 해제">✕ 해제</button></div>
+  ${fl ? `<div class="s12 muted">필터: ${esc(fl)}</div>` : ''}
   <div id="hList" class="col" style="gap:18px">${H.list}</div>`;
 }
 // the parts of 내역 that change while typing a search (the search box itself is never redrawn)
@@ -734,7 +735,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'amt') { const n = e.target.value.replace(/[^\d]/g, ''); e.target.value = n ? Number(n).toLocaleString('ko-KR') : ''; }
   if (e.target.id === 'f_amount' || e.target.id === 'f_n') { const n = e.target.value.replace(/[^\d]/g, ''); e.target.value = n ? Number(n).toLocaleString('ko-KR') : ''; }
 });
-function updateSearch() { const H = hParts(), b = $('#hBoxes'), l = $('#hList'); if (b) b.innerHTML = H.boxes; if (l) l.innerHTML = H.list; }
+function updateSearch() { const H = hParts(), b = $('#hBoxes'), l = $('#hList'), c = $('#clearBtn'); if (b) b.innerHTML = H.boxes; if (l) l.innerHTML = H.list; if (c) c.style.display = H.filtered ? '' : 'none'; }
 document.addEventListener('compositionend', e => { if (e.target.id === 'q') { UI.filter.q = e.target.value; updateSearch(); } });
 document.addEventListener('change', e => { if (e.target.id === 'date') { keepInputs(); UI.date = e.target.value || today(); autoLunch(); render(); } });
 document.addEventListener('scroll', e => { if (e.target.id === 'carousel') { const c = e.target, i = Math.round(c.scrollLeft / c.clientWidth); if (i !== UI.slide) { UI.slide = i; document.querySelectorAll('.dots i').forEach((d, j) => d.classList.toggle('on', j === i)); } } }, true);
